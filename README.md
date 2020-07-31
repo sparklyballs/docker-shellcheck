@@ -1,0 +1,1 @@
+shellcheck built from source
