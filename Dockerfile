@@ -42,6 +42,7 @@ FROM ubuntu:${UBUNTU_VER} as build-stage
 RUN \
 	apt-get update \
 	&& apt-get install -y \
+		--no-install-recommends \
 		cabal-install \
 		curl \
 		ghc \
