@@ -75,7 +75,7 @@ RUN \
 	shellcheck \
 	&& strip --strip-all shellcheck
 
-FROM sparklyballs/alpine-test:${ALPINE_VER}
+FROM alpine:${ALPINE_VER}
 
 ############## runtine stage ##############
 
