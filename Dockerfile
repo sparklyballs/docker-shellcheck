@@ -1,4 +1,3 @@
-ARG UBUNTU_VER="bionic"
 ARG ALPINE_VER="edge"
 FROM alpine:${ALPINE_VER} as fetch-stage
 
@@ -34,26 +33,20 @@ RUN \
 	/tmp/shellcheck.tar.gz -C \
 	/source/shellcheck --strip-components=1
 
-FROM ubuntu:${UBUNTU_VER} as build-stage
+FROM alpine:${ALPINE_VER} as build-stage
 
 ############## build stage ##############
 
 # install build packages
 RUN \
-	apt-get update \
-	&& apt-get install -y \
-		--no-install-recommends \
-		cabal-install \
+	apk add --no-cache \
+		bash \
+		cabal \
 		curl \
 		ghc \
 		git \
-	\
-# cleanup
-	\
-	&& rm -rf \
-		/tmp/* \
-		/var/lib/apt/lists/* \
-		/var/tmp/*
+		libffi-dev \
+		musl-dev
 
 # add artifacts from source stage
 COPY --from=fetch-stage /source /source
@@ -63,22 +56,22 @@ WORKDIR /source/shellcheck
 
 # build app
 RUN \
-	set -ex \
-	&& cabal update \
-	&& cabal install --dependencies-only \
-	&& cabal build Paths_ShellCheck \
-	&& ghc \
-		-idist/build/autogen \
-		-isrc \
-		-optl-pthread \
-		-optl-static \
-		--make \
-	shellcheck \
-	&& strip --strip-all shellcheck
+	_cabal_home="/source/shellcheck/dist" \
+	&& set -ex \
+	&& HOME="$_cabal_home" cabal update \
+	&& HOME="$_cabal_home" cabal v1-install \
+		--disable-documentation \
+		--only-dependencies \
+	&& HOME="$_cabal_home" cabal v1-configure \
+		--libs --static \
+		--enable-executable-static \
+		--enable-executable-stripping \
+	&& HOME="$_cabal_home" cabal v1-build -j \
+	&& strip --strip-all /source/shellcheck/dist/build/shellcheck/shellcheck
 
 FROM alpine:${ALPINE_VER}
 
 ############## runtine stage ##############
 
 # add artifacts from build stage
-COPY --from=build-stage /source/shellcheck/shellcheck /usr/local/bin/
+COPY --from=build-stage /source/shellcheck/dist/build/shellcheck/shellcheck /usr/local/bin/
