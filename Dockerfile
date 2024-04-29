@@ -1,17 +1,20 @@
-ARG ALPINE_VER="3"
+ARG ALPINE_VER="edge"
 FROM alpine:${ALPINE_VER} as fetch-stage
 
 ############## fetch stage ##############
 
 # build args
 ARG RELEASE
+ARG GMP_RELEASE
 
 # install fetch packages
 RUN \
 	apk add --no-cache \
 		bash \
 		curl \
-		jq
+		jq \
+		lzip \
+		tar
 
 # set shell
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -32,6 +35,16 @@ RUN \
 	/tmp/shellcheck.tar.gz -C \
 	/src/shellcheck --strip-components=1
 
+RUN \
+	mkdir -p \
+		/src/gmp \
+	&& curl -o \
+	/tmp/gmp.tar.lz -L \
+		"https://gmplib.org/download/gmp/gmp-${GMP_RELEASE}.tar.lz" \
+	&& tar xf \
+	/tmp/gmp.tar.lz -C \
+	/src/gmp --strip-components=1
+
 FROM alpine:${ALPINE_VER} as build-stage
 
 ############## build stage ##############
@@ -39,21 +52,50 @@ FROM alpine:${ALPINE_VER} as build-stage
 # install build packages
 RUN \
 	apk add --no-cache \
+		autoconf \
+		automake \
 		bash \
 		cabal \
 		curl \
 		ghc \
 		git \
 		libffi-dev \
-		musl-dev
+		libtool \
+		m4 \
+		musl-dev \
+		texinfo
 
 # add artifacts from source stage
 COPY --from=fetch-stage /src /src
 
+# build gmp
+
+# set workdir
+WORKDIR /src/gmp
+
+RUN apk add --no-cache \
+	g++ \
+	make
+
+RUN \
+	./configure \
+		--build=$CBUILD \
+		--host=$CHOST \
+		--with-sysroot=$CBUILDROOT \
+		--prefix=/usr \
+		--infodir=/usr/share/info \
+		--mandir=/usr/share/man \
+		--localstatedir=/var/state/gmp \
+		--enable-cxx \
+		--with-pic \
+	&& make \
+	&& make install
+
+# build app
+
 # set workdir
 WORKDIR /src/shellcheck
 
-# build app
 RUN \
 	_cabal_home="/src/shellcheck/dist" \
 	&& set -ex \
